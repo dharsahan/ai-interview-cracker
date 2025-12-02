@@ -1,0 +1,9 @@
+streamlit
+SpeechRecognition
+openai
+pillow
+pytesseract
+mss
+numpy
+python-dotenv
+pyaudio
