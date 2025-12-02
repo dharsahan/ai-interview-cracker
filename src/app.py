@@ -16,8 +16,9 @@ st.set_page_config(page_title="Parakeet-like Interview Copilot", layout="wide")
 if 'transcriber' not in st.session_state:
     st.session_state.transcriber = AudioTranscriber(mock_mode=False) # Will auto-fallback
 if 'llm' not in st.session_state:
-    api_key = os.getenv("OPENAI_API_KEY")
-    st.session_state.llm = LLMClient(api_key=api_key)
+    model = os.getenv("OLLAMA_MODEL", "llama3.2")
+    host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+    st.session_state.llm = LLMClient(model=model, host=host)
 if 'vision' not in st.session_state:
     st.session_state.vision = ScreenCapturer()
 if 'transcript_history' not in st.session_state:
@@ -46,10 +47,16 @@ def capture_screen_action():
 with st.sidebar:
     st.title("Settings")
 
-    api_key_input = st.text_input("OpenAI API Key", type="password", value=os.getenv("OPENAI_API_KEY", ""))
-    if api_key_input and api_key_input != st.session_state.llm.api_key:
-        st.session_state.llm = LLMClient(api_key=api_key_input)
-        st.success("API Key updated!")
+    st.subheader("Ollama Configuration")
+    model_input = st.text_input("Model Name", value=os.getenv("OLLAMA_MODEL", "llama3.2"))
+    host_input = st.text_input("Ollama Host", value=os.getenv("OLLAMA_HOST", "http://localhost:11434"))
+    
+    if st.button("Update LLM Settings"):
+        st.session_state.llm = LLMClient(model=model_input, host=host_input)
+        if st.session_state.llm._connected:
+            st.success("Connected to Ollama!")
+        else:
+            st.warning("Could not connect to Ollama. Running in Mock Mode.")
 
     st.divider()
 
@@ -59,10 +66,10 @@ with st.sidebar:
     else:
         st.success("Audio: Real Mode")
 
-    if st.session_state.llm.client:
-        st.success("LLM: Connected")
+    if st.session_state.llm._connected:
+        st.success(f"LLM: Connected ({st.session_state.llm.model})")
     else:
-        st.warning("LLM: Mock Mode (No API Key)")
+        st.warning("LLM: Mock Mode (Ollama not running)")
 
 # Main Layout
 st.title("🦜 AI Interview Copilot")

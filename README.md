@@ -2,7 +2,7 @@
 
 This is a proof-of-concept AI Interview Assistant similar to Parakeet AI. It features:
 - **Audio Transcription**: Listens to your microphone (and system audio if configured) to transcribe interview questions.
-- **AI Answers**: Uses an LLM (OpenAI GPT) to generate real-time answers.
+- **AI Answers**: Uses a local LLM (Ollama) to generate real-time answers.
 - **Visual Support**: Can capture the screen to help with coding questions (OCR).
 
 ## Prerequisites
@@ -21,6 +21,27 @@ sudo apt-get install python3-pyaudio portaudio19-dev tesseract-ocr
 brew install portaudio tesseract
 ```
 
+### Ollama Installation
+Install Ollama to run local language models:
+
+**Linux:**
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+```
+
+**MacOS:**
+```bash
+brew install ollama
+```
+
+**Windows:**
+Download from [ollama.com](https://ollama.com/download)
+
+After installation, pull a model (e.g., llama3.2):
+```bash
+ollama pull llama3.2
+```
+
 ### Python Dependencies
 Install the required python packages:
 ```bash
@@ -28,18 +49,27 @@ pip install -r requirements.txt
 ```
 
 ## Configuration
-Create a `.env` file in the root directory or enter your API key in the UI.
+Create a `.env` file in the root directory to customize Ollama settings (optional):
 ```
-OPENAI_API_KEY=sk-...
+OLLAMA_MODEL=llama3.2
+OLLAMA_HOST=http://localhost:11434
 ```
 
 ## Running the App
-Run the Streamlit application:
+
+1. Start the Ollama server (if not already running):
+```bash
+ollama serve
+```
+
+2. Run the Streamlit application:
 ```bash
 streamlit run src/app.py
 ```
 
 ## Troubleshooting
+- **Ollama Connection Errors**: Ensure Ollama is running with `ollama serve` and accessible at the configured host (default: http://localhost:11434).
+- **Model Not Found**: Pull the required model with `ollama pull <model_name>` (e.g., `ollama pull llama3.2`).
 - **Audio Errors**: If you encounter PyAudio errors, ensure `portaudio` is installed correctly. In the sandbox or headless environments, use the "Mock" mode.
 - **OCR Errors**: Ensure `tesseract` is installed and in your PATH.
 

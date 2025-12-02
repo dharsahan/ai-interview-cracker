@@ -86,78 +86,100 @@ class TestLLMClient(unittest.TestCase):
     """Tests for the LLMClient class - handles AI-powered answer generation."""
 
     def test_mock_llm_initialization(self):
-        """Test LLM client initializes in mock mode without API key."""
-        client = LLMClient(api_key=None)
-        self.assertIsNone(client.client)
-        self.assertIsNone(client.api_key)
+        """Test LLM client initializes in mock mode when Ollama is not available."""
+        with patch('llm.ollama.Client') as mock_ollama:
+            mock_ollama.return_value.list.side_effect = Exception("Connection refused")
+            client = LLMClient()
+            self.assertFalse(client._connected)
 
     def test_mock_llm_generates_answer(self):
         """Test mock LLM generates structured mock answers."""
-        client = LLMClient(api_key=None)
-        answer = client.get_answer("What is Python?")
-        self.assertIn("[MOCK AI ANSWER]", answer)
-        self.assertIn("What is Python?", answer)
-        self.assertIn("clear definition", answer.lower())
+        with patch('llm.ollama.Client') as mock_ollama:
+            mock_ollama.return_value.list.side_effect = Exception("Connection refused")
+            client = LLMClient()
+            answer = client.get_answer("What is Python?")
+            self.assertIn("[MOCK AI ANSWER]", answer)
+            self.assertIn("What is Python?", answer)
+            self.assertIn("clear definition", answer.lower())
 
     def test_mock_llm_empty_question(self):
         """Test that empty questions return empty string."""
-        client = LLMClient(api_key=None)
-        answer = client.get_answer("")
-        self.assertEqual(answer, "")
+        with patch('llm.ollama.Client') as mock_ollama:
+            mock_ollama.return_value.list.side_effect = Exception("Connection refused")
+            client = LLMClient()
+            answer = client.get_answer("")
+            self.assertEqual(answer, "")
 
     def test_mock_llm_none_question(self):
         """Test that None question is handled (expects empty or error)."""
-        client = LLMClient(api_key=None)
-        # The function checks for falsy values
-        answer = client.get_answer(None)
-        self.assertEqual(answer, "")
+        with patch('llm.ollama.Client') as mock_ollama:
+            mock_ollama.return_value.list.side_effect = Exception("Connection refused")
+            client = LLMClient()
+            # The function checks for falsy values
+            answer = client.get_answer(None)
+            self.assertEqual(answer, "")
 
-    def test_llm_with_api_key_creates_client(self):
-        """Test that providing an API key creates an OpenAI client."""
-        with patch('llm.OpenAI') as mock_openai:
-            mock_openai.return_value = MagicMock()
-            client = LLMClient(api_key="test-key-12345")
-            mock_openai.assert_called_once_with(api_key="test-key-12345")
-            self.assertIsNotNone(client.client)
+    def test_llm_with_ollama_connected(self):
+        """Test that connecting to Ollama creates a client."""
+        with patch('llm.ollama.Client') as mock_ollama:
+            mock_client = MagicMock()
+            mock_client.list.return_value = {'models': []}
+            mock_ollama.return_value = mock_client
+            client = LLMClient(model="llama3.2", host="http://localhost:11434")
+            mock_ollama.assert_called_once_with(host="http://localhost:11434")
+            self.assertTrue(client._connected)
 
     def test_llm_get_answer_with_real_client(self):
-        """Test getting answer with a mocked OpenAI client."""
-        with patch('llm.OpenAI') as mock_openai:
+        """Test getting answer with a mocked Ollama client."""
+        with patch('llm.ollama.Client') as mock_ollama:
             # Setup mock response
-            mock_response = MagicMock()
-            mock_response.choices = [MagicMock()]
-            mock_response.choices[0].message.content = "This is a test answer."
-            
             mock_client = MagicMock()
-            mock_client.chat.completions.create.return_value = mock_response
-            mock_openai.return_value = mock_client
+            mock_client.list.return_value = {'models': []}
+            mock_client.chat.return_value = {
+                'message': {'content': 'This is a test answer.'}
+            }
+            mock_ollama.return_value = mock_client
             
-            client = LLMClient(api_key="test-key")
+            client = LLMClient(model="llama3.2")
             answer = client.get_answer("Test question")
             
             self.assertEqual(answer, "This is a test answer.")
-            mock_client.chat.completions.create.assert_called_once()
+            mock_client.chat.assert_called_once()
 
     def test_llm_handles_api_error(self):
         """Test that API errors are handled gracefully."""
-        with patch('llm.OpenAI') as mock_openai:
+        with patch('llm.ollama.Client') as mock_ollama:
             mock_client = MagicMock()
-            mock_client.chat.completions.create.side_effect = Exception("API Error")
-            mock_openai.return_value = mock_client
+            mock_client.list.return_value = {'models': []}
+            mock_client.chat.side_effect = Exception("API Error")
+            mock_ollama.return_value = mock_client
             
-            client = LLMClient(api_key="test-key")
+            client = LLMClient()
             answer = client.get_answer("Test question")
             
             self.assertIn("Error", answer)
 
-    def test_llm_reads_env_api_key(self):
-        """Test that LLM client reads API key from environment."""
-        with patch.dict(os.environ, {'OPENAI_API_KEY': 'env-test-key'}):
-            with patch('llm.OpenAI') as mock_openai:
-                mock_openai.return_value = MagicMock()
+    def test_llm_reads_env_model(self):
+        """Test that LLM client reads model from environment."""
+        with patch.dict(os.environ, {'OLLAMA_MODEL': 'mistral'}):
+            with patch('llm.ollama.Client') as mock_ollama:
+                mock_client = MagicMock()
+                mock_client.list.return_value = {'models': []}
+                mock_ollama.return_value = mock_client
                 client = LLMClient()
-                # Should use the env key
-                mock_openai.assert_called_once_with(api_key='env-test-key')
+                # Should use the env model
+                self.assertEqual(client.model, 'mistral')
+
+    def test_llm_reads_env_host(self):
+        """Test that LLM client reads host from environment."""
+        with patch.dict(os.environ, {'OLLAMA_HOST': 'http://custom:8080'}):
+            with patch('llm.ollama.Client') as mock_ollama:
+                mock_client = MagicMock()
+                mock_client.list.return_value = {'models': []}
+                mock_ollama.return_value = mock_client
+                client = LLMClient()
+                # Should use the env host
+                mock_ollama.assert_called_once_with(host='http://custom:8080')
 
 
 class TestScreenCapturer(unittest.TestCase):
@@ -258,38 +280,42 @@ class TestIntegration(unittest.TestCase):
     def test_audio_to_llm_integration(self):
         """Test integration between audio transcription and LLM response."""
         transcriber = AudioTranscriber(mock_mode=True)
-        llm_client = LLMClient(api_key=None)
+        with patch('llm.ollama.Client') as mock_ollama:
+            mock_ollama.return_value.list.side_effect = Exception("Connection refused")
+            llm_client = LLMClient()
         
-        # Simulate getting a transcript
-        transcriber.audio_queue.put(("text", "What is a REST API?"))
-        transcripts = transcriber.get_transcript()
-        
-        self.assertEqual(len(transcripts), 1)
-        self.assertEqual(transcripts[0], "What is a REST API?")
-        
-        # Get answer for the transcript
-        answer = llm_client.get_answer(transcripts[0])
-        self.assertIn("[MOCK AI ANSWER]", answer)
-        self.assertIn("REST API", answer)
+            # Simulate getting a transcript
+            transcriber.audio_queue.put(("text", "What is a REST API?"))
+            transcripts = transcriber.get_transcript()
+            
+            self.assertEqual(len(transcripts), 1)
+            self.assertEqual(transcripts[0], "What is a REST API?")
+            
+            # Get answer for the transcript
+            answer = llm_client.get_answer(transcripts[0])
+            self.assertIn("[MOCK AI ANSWER]", answer)
+            self.assertIn("REST API", answer)
 
     def test_full_mock_workflow(self):
         """Test full workflow in mock mode."""
         # Initialize all components in mock mode
         transcriber = AudioTranscriber(mock_mode=True)
-        llm_client = LLMClient(api_key=None)
-        screen_capturer = ScreenCapturer()
-        
-        # Verify initialization
-        self.assertTrue(transcriber.mock_mode)
-        self.assertIsNone(llm_client.client)
-        self.assertIsNotNone(screen_capturer)
-        
-        # Simulate workflow
-        question = "Explain dependency injection"
-        answer = llm_client.get_answer(question)
-        
-        self.assertIn("[MOCK AI ANSWER]", answer)
-        self.assertIn("dependency injection", answer)
+        with patch('llm.ollama.Client') as mock_ollama:
+            mock_ollama.return_value.list.side_effect = Exception("Connection refused")
+            llm_client = LLMClient()
+            screen_capturer = ScreenCapturer()
+            
+            # Verify initialization
+            self.assertTrue(transcriber.mock_mode)
+            self.assertFalse(llm_client._connected)
+            self.assertIsNotNone(screen_capturer)
+            
+            # Simulate workflow
+            question = "Explain dependency injection"
+            answer = llm_client.get_answer(question)
+            
+            self.assertIn("[MOCK AI ANSWER]", answer)
+            self.assertIn("dependency injection", answer)
 
 
 if __name__ == '__main__':

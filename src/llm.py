@@ -1,15 +1,22 @@
 import os
-from openai import OpenAI
+import ollama
 from typing import Optional
 
 class LLMClient:
-    def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+    def __init__(self, model: Optional[str] = None, host: Optional[str] = None):
+        self.model = model or os.getenv("OLLAMA_MODEL", "llama3.2")
+        self.host = host or os.getenv("OLLAMA_HOST", "http://localhost:11434")
         self.client = None
-        if self.api_key:
-            self.client = OpenAI(api_key=self.api_key)
-        else:
-            print("No API Key provided. LLM will run in Mock Mode.")
+        self._connected = False
+        
+        try:
+            self.client = ollama.Client(host=self.host)
+            # Test connection by listing models
+            self.client.list()
+            self._connected = True
+        except Exception as e:
+            print(f"Could not connect to Ollama at {self.host}. LLM will run in Mock Mode. Error: {e}")
+            self._connected = False
 
     def get_answer(self, question: str) -> str:
         """
@@ -18,21 +25,20 @@ class LLMClient:
         if not question:
             return ""
 
-        if not self.client:
+        if not self._connected:
             return self._mock_answer(question)
 
         try:
-            response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo", # Cost-effective for demo
+            response = self.client.chat(
+                model=self.model,
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant for job interviews. Keep answers concise and to the point. Structure them clearly."},
                     {"role": "user", "content": question}
-                ],
-                max_tokens=300
+                ]
             )
-            return response.choices[0].message.content.strip()
+            return response['message']['content'].strip()
         except Exception as e:
-            return f"Error contacting OpenAI: {e}"
+            return f"Error contacting Ollama: {e}"
 
     def _mock_answer(self, question: str) -> str:
         """Mock answer generator."""
@@ -40,4 +46,4 @@ class LLMClient:
                "1. Start with a clear definition.\n" \
                "2. Provide an example from your experience.\n" \
                "3. Conclude with the impact.\n\n" \
-               "(Please configure OPENAI_API_KEY to get real AI responses)"
+               "(Please ensure Ollama is running with 'ollama serve' to get real AI responses)"
