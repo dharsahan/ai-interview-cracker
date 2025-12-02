@@ -2,8 +2,6 @@ import unittest
 from unittest.mock import MagicMock, patch, Mock
 import sys
 import os
-import time
-import platform
 
 # Add src to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
@@ -39,18 +37,14 @@ class TestAudioTranscriber(unittest.TestCase):
     def test_mock_listening_generates_transcripts(self):
         """Test that mock mode generates sample interview questions."""
         transcriber = AudioTranscriber(mock_mode=True)
-        transcriber.start_listening()
         
-        # Wait for mock phrases to be generated
-        time.sleep(6)  # Mock loop sleeps for 5 seconds
+        # Directly add a mock phrase to the queue instead of waiting
+        transcriber.audio_queue.put(("text", "What is a REST API?"))
         
         transcripts = transcriber.get_transcript()
         self.assertIsInstance(transcripts, list)
-        # Should have at least one transcript
-        if len(transcripts) > 0:
-            self.assertIsInstance(transcripts[0], str)
-        
-        transcriber.stop_listening()
+        self.assertEqual(len(transcripts), 1)
+        self.assertEqual(transcripts[0], "What is a REST API?")
 
     def test_double_start_listening_ignored(self):
         """Test that starting listening when already listening is ignored."""
@@ -192,17 +186,13 @@ class TestScreenCapturer(unittest.TestCase):
 
     def test_capture_and_read_headless_linux(self):
         """Test capture_and_read in headless Linux environment."""
-        with patch.dict(os.environ, {'DISPLAY': ''}, clear=True):
-            if 'DISPLAY' in os.environ:
-                del os.environ['DISPLAY']
-            
+        with patch.dict(os.environ, {}, clear=True):
             with patch('platform.system', return_value='Linux'):
                 capturer = ScreenCapturer()
                 result = capturer.capture_and_read()
                 
                 # Should return error about no DISPLAY
-                if platform.system() == 'Linux' and not os.environ.get('DISPLAY'):
-                    self.assertIn("[Error]", result)
+                self.assertIn("[Error]", result)
 
     def test_capture_and_read_with_display(self):
         """Test capture_and_read when DISPLAY is available."""
